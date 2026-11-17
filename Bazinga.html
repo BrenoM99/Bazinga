@@ -287,9 +287,11 @@ const kbSave=()=>{try{localStorage.setItem('bz_keys',JSON.stringify(KB))}catch(e
 const kbName=c=>({Space:'Espaço',ShiftLeft:'Shift',ShiftRight:'Shift',ControlLeft:'Ctrl',ControlRight:'Ctrl',AltLeft:'Alt',AltRight:'Alt'}[c]||String(c).replace(/^Key/,'').replace(/^Digit/,'').replace(/^Arrow/,'Seta '));
 const kn=k=>[...new Set(KB[k].map(kbName))].join(' / ');
 (()=>{const s=document.createElement('style');s.textContent='@media (pointer:coarse){.pcOnly{display:none!important}}';document.head.appendChild(s)})();
+const KRES=['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','KeyW','KeyA','KeyS','KeyD','Enter','BracketLeft','BracketRight','Equal','Minus'];
 function keysScr(w){const rows=[['kick','Chutar'],['sw','Trocar de jogador'],['pw','Usar habilidade (Lendas, Secretos e Deus)']];
- R(`<h1>⌨️ Teclas (PC)</h1><p class=mut>O movimento é fixo (setas ou WASD). Toque em “Alterar” e aperte a nova tecla. Esc cancela.</p><div class=box>${rows.map(([k,n])=>`<p><b>${n}</b><br><span class=chip>${kn(k)}</span> <button class=chip onclick="keyWait('${k}')">${w==k?'Aperte uma tecla…':'Alterar'}</button></p>`).join('')}</div><button class="btn ghost" onclick="KB=JSON.parse(JSON.stringify(KBD));kbSave();keysScr()">Restaurar padrão</button><button class=btn onclick="home()">Voltar</button>`)}
-function keyWait(k){keysScr(k);const f=e=>{e.preventDefault();e.stopPropagation();removeEventListener('keydown',f,true);if(e.code!='Escape'){KB[k]=[e.code];kbSave()}keysScr()};addEventListener('keydown',f,true)}
+ R(`<h1>⌨️ Teclas (PC)</h1><p class=mut>O movimento é fixo (setas ou WASD). Cada função pode ter <b>quantas teclas você quiser</b>: toque em “Adicionar tecla” e aperte a nova tecla (Esc cancela). Toque no ✕ de uma tecla para removê-la.</p><div class=box>${rows.map(([k,n])=>{const g=[];KB[k].forEach(c=>{const nm=kbName(c);if(!g.includes(nm))g.push(nm)});return `<p><b>${n}</b><br>${g.map(nm=>`<span class=chip>${esc(nm)} <a style="cursor:pointer;margin-left:6px;font-weight:700" onclick="keyDel('${k}','${nm}')">✕</a></span>`).join(' ')} <button class=chip onclick="keyWait('${k}')">${w==k?'Aperte uma tecla…':'➕ Adicionar tecla'}</button></p>`}).join('')}</div><button class="btn ghost" onclick="KB=JSON.parse(JSON.stringify(KBD));kbSave();keysScr()">Restaurar padrão</button><button class=btn onclick="home()">Voltar</button>`)}
+function keyDel(k,nm){const r=KB[k].filter(c=>kbName(c)!=nm);if(!r.length)return toast('Cada função precisa ter pelo menos uma tecla.');KB[k]=r;kbSave();keysScr()}
+function keyWait(k){keysScr(k);const f=e=>{e.preventDefault();e.stopPropagation();removeEventListener('keydown',f,true);if(e.code!='Escape'){if(KRES.includes(e.code))toast('Essa tecla é reservada (movimento, chat ou extrapolation).');else if(!KB[k].includes(e.code)){KB[k]=[...KB[k],e.code];kbSave()}}keysScr()};addEventListener('keydown',f,true)}
 // ===== simulação a partir do ponto em que o jogador parou =====
 function simFrom(A,B,pre){const t0=Math.min(pre.t,300),r=Math.max(0,300-t0)/300,la=1.4*Math.exp((A.att-B.def)/12),lb=1.4*Math.exp((B.att-A.def)/12),g=[pre.g[0],pre.g[1]],ev=pre.ev.map(e=>({...e})),T=[A,B],
  mkE=(m,s,x)=>{const con=T[1-s],og=Math.random()<ownP(con);return{m,s,og:og?1:0,who:og?ownScorer(con):scorer(T[s]),...x}};
@@ -757,6 +759,7 @@ function hsMsg(c,m){const h=HS;if(!h||!m)return;const i=h.pl.indexOf(c),isH=i==0
  case'chat':{if(pi<0)return;let tx=String(m.text||'').replace(/[\u0000-\u001f]/g,'').trim().slice(0,120);if(!tx)return;
   if(/^\/avatar(\s|$)/i.test(tx)){const a=cleanAv(tx.slice(7));c.av=a;h.play.forEach(p=>p.send({t:'avatar',hid:pi,a}));c.send({t:'avset',a});break}
   h.play.forEach(p=>p.send({t:'chat',hid:pi,name:c.name,col:c.col,text:tx}));break}
+ case'again':{if(h.ph!='post'||!h.over||pi<0)return;h.ph='lobby';h.g=0;h.wins=[0,0];h.nx=[];h.over=false;h.pk=null;h.E=null;hsLobby();break}
  case'next':{if(h.ph!='post'||pi<0)return;h.nx[pi]=1;if(h.play.every((_,k)=>h.nx[k]))hsDraft();break}}}
 function hsRtt(){const h=HS,pl=h.play.length?h.play:h.pl,mx=Math.max(...pl.map(p=>p.rtt)),list=pl.map(c=>({n:c.name,ms:Math.round(c.rtt)}));
  pl.forEach((c,i)=>{const d=Math.min(60,Math.max(0,(mx-c.rtt)/2));c.send({t:'rtt',lat:c.rtt+2*d,ping:c.id?Math.round(c.rtt):-1,list})})}
@@ -766,7 +769,7 @@ function hsMatch(){const h=HS,E=HXCmake();
  E.cfg.TIME=h.cfg.time*60;E.cfg.SL=h.cfg.goals;E.init(R_,B,hs,.9,.9);h.E=E;h.ph='count';h.cd=180;h.acc=0;h.last=Date.now();h.play.forEach(c=>c.q=[]);
  const lab=t=>h.play.filter(c=>c.team==t).map(c=>c.name).join(' + '),pub=t=>({name:t.name,team:t.names,roles:t.roles,style:t.style,bs:t.bs}),pl=h.play.map(c=>({id:c.id,name:c.name,col:c.col,av:c.av}));
  h.play.forEach((c,i)=>c.send({t:'go',g:h.g,wins:h.wins,side:c.team,hid:i,R:pub(R_),B:pub(B),names:[lab('red'),lab('blue')],cfg:h.cfg,pl}));hsRtt()}
-function hsEnd(){const h=HS,res=h.E.result(),w=res.win?0:1;h.wins[w]++;const done=h.wins[w]>=2||h.g>=3;h.ph='post';h.E=null;
+function hsEnd(){const h=HS,res=h.E.result(),w=res.win?0:1;h.wins[w]++;const done=h.wins[w]>=2||h.g>=3;h.ph='post';h.over=done;h.E=null;
  h.play.forEach(c=>c.send({t:'end',res,winner:w,wins:h.wins,series:done?w:-1,g:h.g}))}
 function hsTick(){const h=HS;if(!h)return;const now=Date.now();
  if(h.ph=='pick'&&now>h.pkEnd){h.pk.forEach(p=>p.ok=true);hsMatch();return}
@@ -779,10 +782,10 @@ function hsTick(){const h=HS;if(!h)return;const now=Date.now();
 // ---------- cliente (líder e convidados usam o mesmo) ----------
 const lobMove=(id,team)=>ON.send({t:'jt',id,team});
 const lobCfg=()=>{ON.send({t:'cfg',time:+$('#lbt').value,goals:+$('#lbg').value,r:+$('#lbr').value});lss('bz_ot',+$('#lbt').value);lss('bz_og',+$('#lbg').value)};
-function lobbyScr(m){ON.id=m.you;ON.hid=-1;const isH=m.you==m.host,col=t=>m.players.filter(p=>p.team==t),
- row=p=>`<div class=lp><span style="color:${PAL[p.col]}">●</span> ${esc(p.name)}${p.id==m.host?' 👑':''}${p.av?' '+esc(p.av):''}${p.id==m.you?' <span class=mut>(você)</span>':''}${(p.id==m.you||isH)?`<span class=mv><button onclick="lobMove(${p.id},'red')">🔴</button><button onclick="lobMove(${p.id},'spec')">👁</button><button onclick="lobMove(${p.id},'blue')">🔵</button></span>`:''}</div>`,
- colm=(t,tt,c)=>`<div class=lc style="border-color:${c}"><b>${tt} (${col(t).length})</b>${col(t).map(row).join('')||'<span class=mut>—</span>'}</div>`;
- R(`<h1>Sala <span style="letter-spacing:4px">${esc(m.code)}</span></h1><p class=mut>${m.players.length}/6 jogadores. ${isH?'Você é o líder: passe o código para os outros entrarem.':'Aguardando o líder iniciar.'} Escolha seu time com os botões ao lado do seu nome.</p>
+function lobbyScr(m){ON.id=m.you;ON.hid=-1;const isH=m.you==m.host,col=t=>m.players.filter(p=>p.team==t),me=m.players.find(p=>p.id==m.you),
+ row=p=>`<div class=lp><span style="color:${PAL[p.col]}">●</span> ${esc(p.name)}${p.id==m.host?' 👑':''}${p.av?' '+esc(p.av):''}${p.id==m.you?' <span class=mut>(você)</span>':''}${(isH&&p.id!=m.you)?`<span class=mv><button onclick="event.stopPropagation();lobMove(${p.id},'red')">🔴</button><button onclick="event.stopPropagation();lobMove(${p.id},'spec')">👁</button><button onclick="event.stopPropagation();lobMove(${p.id},'blue')">🔵</button></span>`:''}</div>`,
+ colm=(t,tt,c)=>`<div class=lc onclick="lobMove(${m.you},'${t}')" style="border-color:${c};cursor:pointer;${me&&me.team==t?'box-shadow:0 0 0 2px '+c+' inset;':''}" title="Clique para entrar"><b>${tt} (${col(t).length})</b>${me&&me.team==t?' <span class=mut>✓ seu time</span>':' <span class=mut style="font-size:11px">toque para entrar</span>'}${col(t).map(row).join('')||'<span class=mut>—</span>'}</div>`;
+ R(`<h1>Sala <span style="letter-spacing:4px">${esc(m.code)}</span></h1><p class=mut>${m.players.length}/6 jogadores. ${isH?'Você é o líder: passe o código para os outros entrarem.':'Aguardando o líder iniciar.'} Para escolher seu time, <b>clique no nome dele</b> (Red, Espectador ou Blue).</p>
 <div class=lobcols>${colm('red','🔴 Red','#e56e56')}${colm('spec','👁 Espectador','#8aa')}${colm('blue','🔵 Blue','#5689e5')}</div>
 ${isH?`<div class=box><label>Duração ${sel('lbt',[3,4,5,6,7,8,9,10].map(x=>[x,x+' min']),m.cfg.time,'lobCfg()')}</label> &nbsp; <label>Gols para encerrar ${sel('lbg',[1,2,3,4,5,6,7,8,9].map(x=>[x,x+(x==1?' gol':' gols')]),m.cfg.goals,'lobCfg()')}</label><br><label>🎲 Rerolls (iguais para os dois times) ${sel('lbr',[0,1,2,3,4,5,6,7,8,9,10].map(x=>[x,x]),m.cfg.rr[0],'lobCfg()')}</label><br><button class="btn ghost" onclick="manHost()">🔗 Convidar manualmente (sem servidor)</button>${ON&&ON.host&&!ON.sgUp&&Date.now()-ON.t0>6000?'<div class=box>⚠️ Não consegui falar com o servidor de sinalização (a rede pode estar bloqueando). Use o <b>convite manual</b>.</div>':''}</div><button class=btn onclick="ON.send({t:'rand'})">🎲 Random (2 do espectador)</button><button class=btn ${m.err?'disabled':''} onclick="ON.send({t:'start'})">▶ Começar</button>${m.err?`<p class=mut>${esc(m.err)}</p>`:''}`:`<div class=box>Duração: <b>${m.cfg.time} min</b> · Gols para encerrar: <b>${m.cfg.goals}</b><br>🎲 Rerolls por time: <b>${m.cfg.rr[0]}</b></div>`}
 <button class="btn ghost" onclick="onlQuit()">Sair da sala</button>`)}
@@ -797,7 +800,7 @@ function onMsg(m){if(!ON)return;
  case'rtt':ON.lat=m.lat;ON.ping=m.ping;ON.ptxt=m.list.map(x=>esc(x.n)+' '+(x.ms?x.ms+' ms':'líder')).join(' · ');break;
  case's':ON.snap={m:m.d,t:performance.now()};break;
  case'err':toast(m.m);break;
- case'lobby':lobbyScr(m);break;
+ case'lobby':ON.dv=null;ON.snap=null;lobbyScr(m);break;
  case'wait2':ON.wcap=m.cap;if(m.cap!='os capitães')ON.dvcap=m.cap;if(!(ON.dv&&ON.dv.g==m.g))ON.dv=null;if(ON.dv)dvScr();else R(`<h1>⏳ Aguardando…</h1><p class=mut>Partida ${m.g} de 3 · ${esc(m.cap)} está montando o time. Depois você escolhe quem controlar.</p>`);break;
   case'dv':ON.dv=m;dvScr();break;
  case'left':HX.stop();ON.done=1;try{ON.L&&ON.L.close()}catch(e){}if(HS){clearInterval(HS.iv);clearInterval(HS.pg);HS=null}clearInterval(ON.pickT);ON=null;onl('Alguém saiu da partida (ou a conexão caiu).');break;
@@ -815,7 +818,7 @@ function onMsg(m){if(!ON)return;
  case'avset':lss('bz_av',m.a);ON.av=m.a;toast(m.a?'Avatar salvo: '+m.a:'Avatar removido');break;
  case'end':{HX.stop();const won=m.winner==(ON.side=='red'?0:1),mine=ON.side=='red'?m.res.g[0]:m.res.g[1],theirs=ON.side=='red'?m.res.g[1]:m.res.g[0],w=m.wins,my=ON.side=='red'?0:1;SND[won?'win':'lose']();
   const evs=m.res.ev.map(e=>`<p class="${(e.s==my)?'good':'bad'}">${mm2(e.m)} ${e.og?'🤦':'⚽'} <b>${esc(e.who)}</b>${e.og?' (gol contra)':''} <span class=mut>${e.by?'🎮 '+esc(e.by):'🤖 bot'}</span></p>`).join('')||'<span class=mut>Sem gols.</span>';
-  R(`<h1>${won?'✅ Seu time venceu a partida!':'❌ Seu time perdeu a partida'}</h1><div class=score><span>Seu time</span><b>${mine} x ${theirs}</b><span>Rival</span></div>${m.res.ot?'<p class=mut>⏱️ Decidido no OVERTIME.</p>':''}<div class=box><b>Gols</b>${evs}</div><div class=box>Série (melhor de 3): <b>${w[my]} x ${w[1-my]}</b></div>`+(m.series>=0?`<h2>${m.series==my?'🏆 Seu time venceu a série!':'Seu time perdeu a série'}</h2><button class=btn onclick="onlQuit()">Voltar ao menu</button>`:`<button class=btn onclick="ON.send({t:'next'});R('<h1>⏳ Aguardando os outros jogadores…</h1><p class=mut>Quando todos confirmarem, os capitães montam os times da próxima partida.</p>')">Próxima partida</button>`));break}}}
+  R(`<h1>${won?'✅ Seu time venceu a partida!':'❌ Seu time perdeu a partida'}</h1><div class=score><span>Seu time</span><b>${mine} x ${theirs}</b><span>Rival</span></div>${m.res.ot?'<p class=mut>⏱️ Decidido no OVERTIME.</p>':''}<div class=box><b>Gols</b>${evs}</div><div class=box>Série (melhor de 3): <b>${w[my]} x ${w[1-my]}</b></div>`+(m.series>=0?`<h2>${m.series==my?'🏆 Seu time venceu a série!':'Seu time perdeu a série'}</h2><button class=btn onclick="ON.send({t:'again'})">🔁 Jogar de novo</button><button class="btn ghost" onclick="onlQuit()">Voltar ao menu</button>`:`<button class=btn onclick="ON.send({t:'next'});R('<h1>⏳ Aguardando os outros jogadores…</h1><p class=mut>Quando todos confirmarem, os capitães montam os times da próxima partida.</p>')">Próxima partida</button>`));break}}}
 const PNM=new Map(P.map(p=>[p.n,p]));
 function dvScr(){const d=ON&&ON.dv;if(!d)return;const done=ON.wcap=='os capitães',tm=d.team.map(n=>n?PNM.get(n)||null:null),bl=d.blind;ON.dvSeen=ON.dvSeen||{};
  d.cards.forEach((n,i)=>{const c=PNM.get(n);if(d.rev[i]&&c&&(c.t=='Secreto'||c.t=='Deus')&&ON.dvSeen[d.g+n+i+d.team.join()]!==1){ON.dvSeen[d.g+n+i+d.team.join()]=1;toast('✦ '+c.t+': '+c.n)}});
